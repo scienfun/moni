@@ -54,6 +54,13 @@ fi
 # 2. 브리지는 설치 없이 소스에서 바로 실행한다. 필요한 패키지는 pillow뿐이다.
 "$PY" -c "import PIL" 2>/dev/null || die "pkg install python-pillow 를 먼저 실행하세요."
 
+# 2-1. 표정 에셋팩은 저장소에 없고 만들어 쓴다. 없으면 지금 만든다.
+if [ ! -f "$ROOT/assets/build/moni-assets.bin" ]; then
+    echo "표정 에셋 생성 중..."
+    PYTHONPATH="$BRIDGE/src" "$PY" "$ROOT/tools/make_assets.py" >/dev/null \
+        || die "표정 에셋 생성에 실패했습니다."
+fi
+
 # 3. 화면이 꺼져도 프로세스가 죽지 않게 한다. Termux:API가 없으면 건너뛴다.
 command -v termux-wake-lock >/dev/null && termux-wake-lock || true
 
