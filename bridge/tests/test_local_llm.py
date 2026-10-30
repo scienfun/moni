@@ -70,7 +70,15 @@ class LocalBrainTest(unittest.TestCase):
         self.assertEqual(body["reasoning_effort"], "none")
         self.assertEqual(body["response_format"]["type"], "json_schema")
         self.assertIn("<command>안녕</command>", body["messages"][1]["content"])
-        self.assertIn('"temp": 14', body["messages"][1]["content"])
+
+    def test_weather_is_only_in_the_prompt_when_asked(self):
+        self.brain.decide("심심해", NOW, {"temp": 14, "pop": 70})
+        self.assertNotIn("weather", self.state.requests[0]["body"]["messages"][1]["content"])
+        self.assertNotIn("temp", self.state.requests[0]["body"]["messages"][1]["content"])
+        from moni_bridge.brain import user_message
+
+        self.assertIn('"temp": 14', user_message("날씨 알려줘", NOW, {"temp": 14}))
+        self.assertIn("불러오지 못함", user_message("우산 필요해?", NOW, None))
 
     def test_json_in_reasoning_content_is_accepted(self):
         self.state.message = {
