@@ -1,0 +1,13 @@
+.env
+bridge/moni.toml
+.state/
+.venv/
+__pycache__/
+.build/
+firmware/.pio/
+firmware/data/
+assets/build/
+stock-backup.*
+.DS_Store
+*.zip
+dist/

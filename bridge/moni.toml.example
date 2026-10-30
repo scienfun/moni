@@ -1,0 +1,27 @@
+[device]
+backend = "stock"        # stock: 순정 펌웨어(플래싱 불필요), custom: 커스텀 펌웨어
+host = "192.168.1.230"   # SmallTV IP. custom은 "moni.local", 시뮬레이터는 "127.0.0.1:8081"
+fallback_ip = ""         # host 접속 실패 시 사용할 고정 IP
+timeout = 4.0
+
+[llm]
+provider = "lmstudio"          # lmstudio: 로컬 모델, anthropic: Claude API
+model = "qwen/qwen3.8-27b"     # anthropic은 "claude-haiku-5-5"
+base_url = "http://127.0.0.1:1234/v1"
+timeout = 30.0
+max_line_chars = 40
+monthly_token_limit = 500000   # anthropic 전용, 넘으면 규칙 기반 응답으로 전환
+
+[server]
+bind = "0.0.0.0"
+port = 8765
+
+[schedule]
+night_start = "23:00"
+night_end = "07:00"
+day_brightness = 200
+night_brightness = 30
+
+[weather]
+latitude = 37.5665      # 기본값: 서울
+longitude = 126.9780

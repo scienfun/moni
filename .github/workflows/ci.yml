@@ -1,0 +1,26 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  bridge:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --project bridge
+      - run: make test
+      - run: make test-native
+
+  firmware:
+    runs-on: ubuntu-latest
+    env:
+      MONI_DEVICE_TOKEN: ci-token
+      MONI_OTA_PASSWORD: ci-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv tool install platformio
+      - run: cd firmware && pio run -e moni
