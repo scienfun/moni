@@ -11,11 +11,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BRIDGE="$ROOT/bridge"
 LLAMA_DIR="${LLAMA_DIR:-$HOME/llama.cpp}"
 MODEL_BASENAME="qwen2.5-1.5b-instruct-q4_k_m.gguf"
-# 직접 빌드한 llama.cpp가 있으면 그것을, 없으면 pkg로 설치한 llama-server를 쓴다.
-if [ -x "$LLAMA_DIR/build/bin/llama-server" ]; then
-    LLAMA_BIN="${LLAMA_BIN:-$LLAMA_DIR/build/bin/llama-server}"
+# 실행 가능한 llama-server를 후보로 모은다. 직접 빌드한 것, pkg로 설치한 것 순서이고
+# 앞의 것이 죽으면 다음 것을 시도한다. LLAMA_BIN을 주면 그것만 쓴다.
+CANDIDATES=()
+if [ -n "${LLAMA_BIN:-}" ]; then
+    CANDIDATES+=("$LLAMA_BIN")
 else
-    LLAMA_BIN="${LLAMA_BIN:-$(command -v llama-server || true)}"
+    [ -x "$LLAMA_DIR/build/bin/llama-server" ] && CANDIDATES+=("$LLAMA_DIR/build/bin/llama-server")
+    PKG_BIN="$(command -v llama-server || true)"
+    [ -n "$PKG_BIN" ] && CANDIDATES+=("$PKG_BIN")
 fi
 if [ -f "$LLAMA_DIR/models/$MODEL_BASENAME" ]; then
     MODEL_FILE="${MODEL_FILE:-$LLAMA_DIR/models/$MODEL_BASENAME}"
@@ -30,7 +34,7 @@ LOG="${TMPDIR:-/tmp}/llama-server.log"
 
 die() { echo "오류: $*" >&2; exit 1; }
 
-[ -n "$LLAMA_BIN" ] && [ -x "$LLAMA_BIN" ] || die "llama-server가 없습니다. bash install.sh 를 먼저 실행하세요."
+[ "${#CANDIDATES[@]}" -gt 0 ] || die "llama-server가 없습니다. bash install.sh 를 먼저 실행하세요."
 [ -f "$MODEL_FILE" ] || die "모델 파일이 없습니다: $MODEL_FILE (bash install.sh 로 받을 수 있습니다)"
 PY="$(command -v python || command -v python3)" || die "pkg install python python-pillow 를 먼저 실행하세요."
 
@@ -54,22 +58,39 @@ fi
 command -v termux-wake-lock >/dev/null && termux-wake-lock || true
 
 # 4. llama-server를 백그라운드로 띄우고 준비될 때까지 기다린다.
-if curl -fs "http://127.0.0.1:$LLAMA_PORT/health" >/dev/null 2>&1; then
-    echo "llama-server가 이미 실행 중입니다. 그대로 씁니다."
-else
-    "$LLAMA_BIN" -m "$MODEL_FILE" --host 127.0.0.1 --port "$LLAMA_PORT" \
-        -c 2048 -t "$THREADS" >"$LOG" 2>&1 &
+llama_ready() { curl -fs "http://127.0.0.1:$LLAMA_PORT/health" >/dev/null 2>&1; }
+
+# 서버 하나를 시도한다. 준비되면 0, 죽거나 4분을 넘기면 1을 돌려준다.
+start_llama() {
+    echo "llama-server 시도: $1"
+    # 공유 라이브러리를 상대 경로로 찾는 빌드가 있어 실행 파일의 상위 폴더에서 띄운다.
+    (cd "$(dirname "$1")/.." && exec "$1" -m "$MODEL_FILE" --host 127.0.0.1 \
+        --port "$LLAMA_PORT" -c 2048 -t "$THREADS") >"$LOG" 2>&1 &
     LLAMA_PID=$!
-    trap 'kill "$LLAMA_PID" 2>/dev/null || true' EXIT INT TERM
     echo -n "모델 로딩 중"
     for _ in $(seq 1 120); do
-        curl -fs "http://127.0.0.1:$LLAMA_PORT/health" >/dev/null 2>&1 && break
-        kill -0 "$LLAMA_PID" 2>/dev/null || { echo; tail -n 20 "$LOG"; die "llama-server가 종료됐습니다."; }
+        if llama_ready; then echo " 준비됨"; return 0; fi
+        if ! kill -0 "$LLAMA_PID" 2>/dev/null; then
+            echo; tail -n 20 "$LOG"
+            echo "이 서버는 종료됐습니다. (로그: $LOG)"
+            return 1
+        fi
         echo -n "."; sleep 2
     done
-    curl -fs "http://127.0.0.1:$LLAMA_PORT/health" >/dev/null 2>&1 \
-        || die "4분 안에 모델이 준비되지 않았습니다. 로그: $LOG"
-    echo " 준비됨"
+    echo; kill "$LLAMA_PID" 2>/dev/null || true
+    return 1
+}
+
+if llama_ready; then
+    echo "llama-server가 이미 실행 중입니다. 그대로 씁니다."
+else
+    LLAMA_PID=""
+    trap '[ -n "$LLAMA_PID" ] && kill "$LLAMA_PID" 2>/dev/null || true' EXIT INT TERM
+    started=0
+    for candidate in "${CANDIDATES[@]}"; do
+        if start_llama "$candidate"; then started=1; break; fi
+    done
+    [ "$started" = 1 ] || die "사용할 수 있는 llama-server가 없습니다. 위 로그를 확인하세요."
 fi
 
 # 5. 브리지 실행 (여기서 계속 돈다)
