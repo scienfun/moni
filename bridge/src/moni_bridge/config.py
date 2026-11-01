@@ -13,10 +13,11 @@ REPO_ROOT = BRIDGE_ROOT.parent
 
 @dataclass
 class DeviceConfig:
-    backend: str = "stock"  # stock: 순정 펌웨어, custom: firmware/ 커스텀 펌웨어
+    backend: str = "stock"  # stock: 순정 펌웨어, custom: firmware/ 커스텀 펌웨어, serial: USB 연결 RP2040 OLED
     host: str = "moni.local"
     fallback_ip: str = ""
     timeout: float = 4.0
+    port: str = ""  # serial 전용. 비우면 PING에 답하는 보드를 찾는다.
 
 
 @dataclass

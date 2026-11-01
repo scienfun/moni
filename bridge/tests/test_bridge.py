@@ -52,7 +52,8 @@ class FakeBrain:
     def __init__(self, decision: Decision) -> None:
         self.decision = decision
 
-    def decide(self, text, now, weather) -> Decision:
+    def decide(self, text, now, weather, history=None) -> Decision:
+        self.histories = getattr(self, "histories", []) + [list(history or [])]
         return self.decision
 
 
@@ -225,6 +226,24 @@ class EndToEndTest(unittest.TestCase):
             ScheduleConfig(),
             clock=lambda: NOW,
         )
+
+    def test_previous_turns_are_passed_to_the_brain_and_forgotten_later(self):
+        service = self._service(Decision("happy", "12시야", "12시야", "time", 20))
+        service.command("지금 몇 시야")
+        service.command("어케 알았음?")
+        histories = service.brain.histories
+        self.assertEqual(histories[0], [])
+        self.assertEqual([t for t, _ in histories[1]], ["지금 몇 시야"])
+        service._history = [(h[0] - 10_000, h[1], h[2]) for h in service._history]
+        service.command("그래?")
+        self.assertEqual(service.brain.histories[2], [])
+
+    def test_history_keeps_only_recent_turns(self):
+        service = self._service(Decision("happy", "응", "응", "none", 20))
+        for n in range(10):
+            service.command(f"말 {n}")
+        texts = [t for t, _ in service.brain.histories[-1]]
+        self.assertEqual(texts, [f"말 {n}" for n in range(3, 9)])
 
     def test_command_updates_screen_and_returns_schema(self):
         service = self._service(Decision("worry", "우산!", "우산!", "weather", 20))

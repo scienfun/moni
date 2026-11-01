@@ -1,8 +1,9 @@
 [device]
-backend = "stock"        # stock: 순정 펌웨어(플래싱 불필요), custom: 커스텀 펌웨어
+backend = "stock"        # stock: 순정 펌웨어(플래싱 불필요), custom: 커스텀 펌웨어, serial: USB 연결 RP2040 OLED
 host = "192.168.1.230"   # SmallTV IP. custom은 "moni.local", 시뮬레이터는 "127.0.0.1:8081"
 fallback_ip = ""         # host 접속 실패 시 사용할 고정 IP
 timeout = 4.0
+port = ""                  # serial 전용. 비우면 모니 펌웨어가 답하는 /dev/cu.usbmodem* 를 찾는다
 
 [llm]
 provider = "lmstudio"          # lmstudio: 로컬 모델, anthropic: Claude API

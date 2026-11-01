@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import threading
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .brain import build_brain
@@ -154,13 +155,18 @@ def make_handler(
 
 
 def build_service(config: Config) -> MoniService:
+    from .oled import OledRenderer
     from .render import Renderer
 
+    device = build_device(config)
+    weather = WeatherService(config.weather)
+    if hasattr(device, "attach"):
+        device.attach(weather.current, datetime.now)
     return MoniService(
-        build_device(config),
+        device,
         build_brain(config),
-        Renderer(),
-        WeatherService(config.weather),
+        OledRenderer() if config.device.backend == "serial" else Renderer(),
+        weather,
         config.schedule,
     )
 

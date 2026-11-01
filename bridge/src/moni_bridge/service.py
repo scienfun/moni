@@ -21,6 +21,8 @@ PANEL_Y = 8
 MIN_TTL = 5
 MAX_TTL = 120
 LISTEN_TIMEOUT = 30
+HISTORY_TURNS = 6  # 모델에 넘길 직전 대화 수
+HISTORY_SECONDS = 600  # 이보다 오래된 대화는 잊는다
 
 
 def is_night(now: datetime, start: str, end: str) -> bool:
@@ -53,6 +55,17 @@ class MoniService:
         self._lock = threading.Lock()
         self._night: bool | None = None
         self._timer_bucket: int | None = None
+        self._history: list[tuple[float, str, Decision]] = []
+
+    def _recent(self) -> list[tuple[str, Decision]]:
+        cutoff = time.monotonic() - HISTORY_SECONDS
+        with self._lock:
+            self._history = [h for h in self._history if h[0] >= cutoff][-HISTORY_TURNS:]
+            return [(text, decision) for _, text, decision in self._history]
+
+    def _remember(self, text: str, decision: Decision) -> None:
+        with self._lock:
+            self._history.append((time.monotonic(), text, decision))
 
     def _safe(self, action: Callable, *args) -> bool:
         """기기가 꺼져 있어도 클라이언트 응답은 계속 돌려준다."""
@@ -143,7 +156,8 @@ class MoniService:
 
         now = self.clock()
         weather = self.weather.current()
-        decision = self._normalize(self.brain.decide(text, now, weather))
+        decision = self._normalize(self.brain.decide(text, now, weather, self._recent()))
+        self._remember(text, decision)
         think.join()
 
         if decision.timer_seconds == 0:

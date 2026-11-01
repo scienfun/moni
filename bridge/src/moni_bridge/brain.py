@@ -117,6 +117,37 @@ def user_message(text: str, now: datetime, weather: dict | None) -> str:
     )
 
 
+History = list[tuple[str, "Decision"]]
+
+
+def build_messages(
+    text: str, now: datetime, weather: dict | None, history: History | None
+) -> list[dict]:
+    """직전 대화를 앞에 붙인다. 지난 말을 되받는 질문("어케 알았음?")에 답하려면 필요하다."""
+    messages: list[dict] = []
+    for past_text, past in history or []:
+        messages.append({"role": "user", "content": f"<command>{past_text}</command>"})
+        messages.append(
+            {
+                "role": "assistant",
+                "content": json.dumps(
+                    {
+                        "emotion": past.emotion,
+                        "line": past.line,
+                        "speak": past.speak,
+                        "panel": past.panel if past.panel in ("none", "weather", "time") else "none",
+                        "ttl": past.ttl,
+                        "timer_seconds": None,
+                        "brightness": None,
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        )
+    messages.append({"role": "user", "content": user_message(text, now, weather)})
+    return messages
+
+
 class Usage:
     """월별 토큰 사용량을 파일에 남겨 비용 한도를 지킨다."""
 
@@ -162,24 +193,26 @@ class Brain:
     def _available(self) -> bool:
         return self.client is not None and not self.usage.exceeded()
 
-    def decide(self, text: str, now: datetime, weather: dict | None) -> Decision:
+    def decide(
+        self, text: str, now: datetime, weather: dict | None, history: History | None = None
+    ) -> Decision:
         if not self._available():
             return rule_decide(text, now, weather)
         try:
-            return self._ask_llm(text, now, weather)
+            return self._ask_llm(text, now, weather, history)
         except Exception as error:  # 응답이 끊기지 않도록 어떤 오류든 규칙으로 넘긴다.
             log.warning("LLM 호출 실패, 규칙 응답으로 전환: %s", error)
             return rule_decide(text, now, weather)
 
-    def _ask_llm(self, text: str, now: datetime, weather: dict | None) -> Decision:
+    def _ask_llm(
+        self, text: str, now: datetime, weather: dict | None, history: History | None = None
+    ) -> Decision:
         response = self.client.messages.create(
             model=self.model,
             max_tokens=1024,
             thinking={"type": "disabled"},
             system=SYSTEM_PROMPT.format(max_chars=self.max_chars),
-            messages=[
-                {"role": "user", "content": user_message(text, now, weather)}
-            ],
+            messages=build_messages(text, now, weather, history),
             output_config={"format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
         )
         usage = response.usage
@@ -206,11 +239,15 @@ class LocalBrain(Brain):
     def _available(self) -> bool:
         return True
 
-    def decide(self, text: str, now: datetime, weather: dict | None) -> Decision:
+    def decide(
+        self, text: str, now: datetime, weather: dict | None, history: History | None = None
+    ) -> Decision:
         # 로컬 모델은 수 초가 걸리고 기기 조작이 부정확해 규칙을 먼저 쓴다.
-        return rule_match(text, now, weather) or super().decide(text, now, weather)
+        return rule_match(text, now, weather) or super().decide(text, now, weather, history)
 
-    def _ask_llm(self, text: str, now: datetime, weather: dict | None) -> Decision:
+    def _ask_llm(
+        self, text: str, now: datetime, weather: dict | None, history: History | None = None
+    ) -> Decision:
         body = {
             "model": self.model,
             "messages": [
@@ -218,7 +255,7 @@ class LocalBrain(Brain):
                     "role": "system",
                     "content": SYSTEM_PROMPT.format(max_chars=self.max_chars),
                 },
-                {"role": "user", "content": user_message(text, now, weather)},
+                *build_messages(text, now, weather, history),
             ],
             "max_tokens": 512,
             # 추론을 끄지 않으면 JSON이 reasoning_content로 나오고 훨씬 느리다.

@@ -7,7 +7,7 @@ LMS := $(HOME)/.lmstudio/bin/lms
 LLM_MODEL := $(shell sed -n 's/^model = "\([^"]*\)".*/\1/p' bridge/moni.toml 2>/dev/null)
 
 .PHONY: setup fetch-font run llm sim say doctor test test-native assets assets-upload \
-        firmware flash ota backup install-service
+        firmware flash ota backup install-service rp2040-install
 
 setup:
 	uv sync --project bridge
@@ -67,3 +67,7 @@ backup:
 
 install-service:
 	python3 tools/install_service.py
+
+# USB로 연결한 RP2040 OLED 보드에 모니 펌웨어를 올린다. 사용: make rp2040-install PORT=/dev/cu.usbmodemXXXX
+rp2040-install:
+	python3 tools/rp2040_repl.py $(PORT) install

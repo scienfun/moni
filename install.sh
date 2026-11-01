@@ -15,6 +15,8 @@ die() { echo "오류: $*" >&2; exit 1; }
 command -v pkg >/dev/null || die "Termux에서 실행하세요. (F-Droid 버전 Termux 권장)"
 
 echo "[1/3] 패키지 설치"
+# llama-cpp는 최신 libc++에 맞춰 빌드되므로 먼저 전체를 올려야 심볼 오류(__hash_memory)가 나지 않는다.
+pkg update -y && pkg upgrade -y
 pkg install -y python python-pillow curl git llama-cpp termux-api
 
 echo "[2/3] 모델 준비"

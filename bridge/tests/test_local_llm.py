@@ -80,6 +80,18 @@ class LocalBrainTest(unittest.TestCase):
         self.assertIn('"temp": 14', user_message("날씨 알려줘", NOW, {"temp": 14}))
         self.assertIn("불러오지 못함", user_message("우산 필요해?", NOW, None))
 
+    def test_previous_turns_come_before_the_new_message(self):
+        from moni_bridge.brain import Decision
+
+        past = Decision("happy", "지금 12시야.", "지금 열두 시야.", panel="time")
+        self.brain.decide("어케 알았음?", NOW, None, [("지금 몇 시야", past)])
+        roles = [m["role"] for m in self.state.requests[0]["body"]["messages"]]
+        self.assertEqual(roles, ["system", "user", "assistant", "user"])
+        messages = self.state.requests[0]["body"]["messages"]
+        self.assertEqual(messages[1]["content"], "<command>지금 몇 시야</command>")
+        self.assertEqual(json.loads(messages[2]["content"])["line"], "지금 12시야.")
+        self.assertIn("<command>어케 알았음?</command>", messages[3]["content"])
+
     def test_json_in_reasoning_content_is_accepted(self):
         self.state.message = {
             "content": "", "reasoning_content": json.dumps(ANSWER),

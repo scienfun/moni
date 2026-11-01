@@ -151,6 +151,10 @@ def build_device(config: Config):
         from .stock import StockDevice
 
         return StockDevice(config.device)
+    if config.device.backend == "serial":
+        from .serial_oled import SerialDevice
+
+        return SerialDevice(config.device)
     if config.device.backend == "custom":
         return DeviceClient(config.device, config.secrets.device_token)
     raise ValueError(f"알 수 없는 backend: {config.device.backend}")

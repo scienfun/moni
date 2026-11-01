@@ -65,12 +65,13 @@ def doctor(config: Config) -> int:
         free = probe.connect_ex(("127.0.0.1", config.server.port)) != 0
     checks.append((f"브리지 포트 {config.server.port}", True, "비어 있음" if free else "브리지 실행 중"))
 
+    target = config.device.port or "USB" if config.device.backend == "serial" else config.device.host
     try:
         status = build_device(config).status()
         detail = f"{config.device.backend}, fw {status.get('fw')}"
-        checks.append((f"기기 {config.device.host}", True, detail))
+        checks.append((f"기기 {target}", True, detail))
     except DeviceError as error:
-        checks.append((f"기기 {config.device.host}", False, str(error)))
+        checks.append((f"기기 {target}", False, str(error)))
 
     for name, passed, detail in checks:
         print(f"[{'OK' if passed else '!!'}] {name}: {detail}")

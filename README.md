@@ -78,6 +78,25 @@ bash moni/install.sh
 
 실행되면 폰 브라우저에 `http://localhost:8765/` 채팅 화면이 열린다. 대화 내역이 남고, 마이크 버튼(Android Chrome)으로 말할 수도 있다. 이후에는 `moni-start`만 입력한다. 채팅 화면은 토큰 없이 열리는 대신 같은 기기(localhost)에서 온 요청만 받는다. 폰에서 실행해 본 적은 없고, 가짜 모델 서버와 시뮬레이터로 흐름만 확인했다.
 
+## USB로 연결한 RP2040 OLED (`backend = "serial"`)
+
+Waveshare RP2040-Zero에 SSD1306 OLED(128×64, I2C: SDA GP0, SCL GP1, 주소 0x3C)를 달고 맥에 USB로 연결하면, 브리지가 시리얼로 화면을 바로 갱신한다. 네트워크와 플래시 쓰기가 없어 화면 갱신이 약 0.13초다(맥에서 실측, 모델 시간 제외). 보드에는 MicroPython과 `ssd1306.py`가 있어야 한다.
+
+```bash
+make rp2040-install PORT=/dev/cu.usbmodemXXXX   # firmware-rp2040/main.py를 보드에 올림, 기존 main.py는 main_prev.py로 보관
+```
+
+`bridge/moni.toml`의 `[device]`를 `backend = "serial"`로 바꾸고(`port`는 비워 두면 모니 펌웨어가 답하는 `/dev/cu.usbmodem*`를 찾는다) `make run` 한다.
+
+- 노랑·파랑 2색 패널을 가정한다(위 16줄 노랑, 아래 48줄 파랑).
+- 노랑 띠: 대기 중에 4초마다 `11/1(일) 14:05`와 `맑음 14도 / 비 20%`를 번갈아 보여 주고, 생각·듣는 중에는 상태 문구를 보여 준다. 날씨를 못 불러오면 날짜·시각만 나온다.
+- 파랑 영역: 대기·생각 중에는 큰 얼굴만, 응답 때는 왼쪽에 작은 얼굴이 움직이고 오른쪽에 대사가 뜬다. 긴 대사는 2페이지까지, 글자 크기는 16·14·12px 중 맞는 것을 고른다.
+- 날씨·시간 패널은 대사에 이미 들어 있어 겹쳐 그리지 않는다. 타이머는 1초마다 남은 시간을 보여 준다.
+- 밝기 명령은 OLED 대비(contrast)로 바뀐다.
+- macOS·Linux 전용이다(표준 라이브러리 `termios`). 폰(Termux)에서는 USB 시리얼 접근을 따로 만들어야 해서 지원하지 않는다.
+- 보드가 다른 프로그램(예: 이전 `main.py`)을 돌리고 있으면 브리지가 "모니 펌웨어가 올라간 보드를 찾지 못했습니다"라고 알린다. 이전 프로그램으로 되돌리려면 `python tools/rp2040_repl.py PORT put <백업파일> main.py`를 쓴다.
+- 보드 명령은 `firmware-rp2040/main.py` 머리말에 있다. `python tools/rp2040_repl.py PORT ls|get|put|reset`으로 보드 파일을 다룰 수 있다.
+
 ## 자동 시작
 
 ```bash
